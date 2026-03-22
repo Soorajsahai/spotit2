@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "users": { ".read": true, ".write": true },
+    "issues": { ".read": true, ".write": true },
+    "reports": { ".read": true, ".write": true },
+    "posts": { ".read": true, ".write": true }
+  }
+}

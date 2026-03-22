@@ -1,0 +1,14 @@
+Broken-Cracked-Manholes
+Broken-Damaged-Bridges
+Broken-Damaged-Pipelines
+Broken-Damaged-Staircases
+Broken-Poles
+Cracked-Damaged-Sidewalks
+Cracked-Historical-Building
+Cracked-Surfaces
+Damaged-Railway
+Damaged-roads
+Faulty-Building-Walls
+Faulty-Shipping-Container
+Historical-building
+Skycrapper-Glasses-Cracked

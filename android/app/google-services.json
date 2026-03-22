@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1095873417567",
+    "project_id": "spotit-62cab",
+    "storage_bucket": "spotit-62cab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1095873417567:android:85c0280abfe34aa5cbe6ea",
+        "android_client_info": {
+          "package_name": "com.example.spotit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNzqwQFpdLPsIEvJ8VAW0diEUVqf2DQ58"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
