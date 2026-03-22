@@ -3,5 +3,5 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "uvicorn ultralytics_server:app --host 0.0.0.0 --port $PORT"
+startCommand = "python ultralytics_server.py"
 restartPolicyType = "on_failure"
