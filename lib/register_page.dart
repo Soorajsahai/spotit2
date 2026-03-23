@@ -363,7 +363,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       text: TextSpan(
                         children: [
                           TextSpan(
-                            text: 'Campus',
+                            text: 'Spot',
                             style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
@@ -372,7 +372,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                           ),
                           TextSpan(
-                            text: 'Fix',
+                            text: 'it',
                             style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
