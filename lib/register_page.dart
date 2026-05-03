@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'email_service.dart';
-import 'firebase_db.dart';
 import 'app_theme.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -12,7 +11,7 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  DatabaseReference get _db => dbRef("users");
+  final _db = Supabase.instance.client.from('users');
   
   final TextEditingController nameCtrl = TextEditingController();
   final TextEditingController usernameCtrl = TextEditingController();
@@ -179,8 +178,11 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _completeRegistration() async {
     try {
       // Check if username already exists
-      final snapshot = await _db.orderByChild("username").equalTo(usernameCtrl.text).once();
-      if (snapshot.snapshot.value != null) {
+      final existing = await _db
+          .select('id')
+          .eq('username', usernameCtrl.text)
+          .limit(1);
+      if ((existing as List).isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text("Username already exists"),
@@ -198,24 +200,24 @@ class _RegisterPageState extends State<RegisterPage> {
         "email": emailCtrl.text,
         "password": passwordCtrl.text,
         "role": selectedRole,
-        "createdAt": DateTime.now().toIso8601String(),
-        "profileComplete": false,
-        "emailVerified": true,
+        "created_at": DateTime.now().toIso8601String(),
+        "profile_complete": false,
+        "email_verified": true,
       };
 
       // Add role-specific data
       if (selectedRole == "Student") {
         userData["department"] = selectedDepartment;
-        userData["userType"] = "Student";
+        userData["user_type"] = "Student";
       } else if (selectedRole == "Admin") {
-        userData["adminType"] = selectedAdminType;
-        userData["employeeId"] = employeeIdCtrl.text;
+        userData["admin_type"] = selectedAdminType;
+        userData["employee_id"] = employeeIdCtrl.text;
         userData["department"] = selectedDepartment ?? "Administration";
-        userData["userType"] = "Staff";
+        userData["user_type"] = "Staff";
       }
 
-      // Register new user
-      await _db.push().set(userData);
+      // Register new user in Supabase
+      await _db.insert(userData);
 
       // Success
       ScaffoldMessenger.of(context).showSnackBar(

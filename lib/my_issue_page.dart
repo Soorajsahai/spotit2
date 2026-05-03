@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'firebase_service.dart';
+import 'supabase_service.dart';
 import 'model/issue_model.dart';
 import 'model/post_model.dart';
 import 'user_service.dart';
@@ -13,7 +13,7 @@ class MyIssuesPage extends StatefulWidget {
 }
 
 class _MyIssuesPageState extends State<MyIssuesPage> {
-  final service = FirebaseService();
+  final service = SupabaseService();
 
   String _formatTimeAgo(DateTime? reportedAt) {
     if (reportedAt == null) return '';
@@ -53,45 +53,33 @@ class _MyIssuesPageState extends State<MyIssuesPage> {
                 ],
               ),
             )
-          : StreamBuilder(
-              stream: service.getIssues().onValue.asBroadcastStream(),
+          : StreamBuilder<List<Issue>>(
+              stream: service.issuesStream,
               builder: (context, issueSnap) {
                 final issues = <Issue>[];
                 if (issueSnap.hasData) {
-                  final value = issueSnap.data!.snapshot.value;
-                  if (value is Map) {
-                    final map = Map<dynamic, dynamic>.from(value);
-                    issues.addAll(
-                      map.entries
-                          .map((e) => Issue.fromJson(Map<dynamic, dynamic>.from(e.value)))
-                          // Match either by stored userId (legacy) or username (new)
-                          .where((i) =>
-                              (i.reportedBy ?? '') == userId ||
-                              (i.reportedBy ?? '') == (UserService.username ?? '')),
-                    );
-                    issues.sort((a, b) {
-                      if (b.upvotes != a.upvotes) return b.upvotes.compareTo(a.upvotes);
-                      return (b.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-                          .compareTo(a.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0));
-                    });
-                  }
+                  issues.addAll(
+                    issueSnap.data!
+                        .where((i) =>
+                            (i.reportedBy ?? '') == userId ||
+                            (i.reportedBy ?? '') == (UserService.username ?? '')),
+                  );
+                  issues.sort((a, b) {
+                    if (b.upvotes != a.upvotes) return b.upvotes.compareTo(a.upvotes);
+                    return (b.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                        .compareTo(a.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+                  });
                 }
 
-                return StreamBuilder(
+                return StreamBuilder<List<Post>>(
                   stream: service.postsStream,
                   builder: (context, postSnap) {
                     final myPosts = <Post>[];
                     if (postSnap.hasData) {
-                      final value = postSnap.data!.snapshot.value;
-                      if (value is Map) {
-                        final map = Map<dynamic, dynamic>.from(value);
-                        myPosts.addAll(
-                          map.entries
-                              .map((e) => Post.fromJson(Map<dynamic, dynamic>.from(e.value), e.key.toString()))
-                              .where((p) => p.authorId == userId),
-                        );
-                        myPosts.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
-                      }
+                      myPosts.addAll(
+                        postSnap.data!.where((p) => p.authorId == userId),
+                      );
+                      myPosts.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
                     }
 
                     if (issues.isEmpty && myPosts.isEmpty) {

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'user_service.dart';
 import 'theme_service.dart';
 import 'splash_screen.dart';
@@ -14,6 +13,10 @@ import 'reports_display_page.dart';
 import 'track_issues_page.dart';
 import 'settings_page.dart';
 import 'app_theme.dart';
+
+const String _supabaseUrl = 'https://atbjmejzxvdswheltwjg.supabase.co';
+const String _supabaseAnonKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0YmptZWp6eHZkc3doZWx0d2pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3ODI3ODMsImV4cCI6MjA5MzM1ODc4M30.Zbk0MTgoOL-8mME4QonvIDCNCgiZHNIEkq0UA8BkTWA';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,19 +52,14 @@ void main() async {
       ),
     );
   };
-  
-  // Initialize Firebase with error handling
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    print('Firebase initialized successfully');
-  } catch (e, stackTrace) {
-    print('Firebase initialization error: $e');
-    print('Stack trace: $stackTrace');
-    // Continue anyway - some Firebase features might still work
-  }
-  
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: _supabaseUrl,
+    anonKey: _supabaseAnonKey,
+  );
+  print('Supabase initialized successfully');
+
   runApp(const SpotItAI());
 }
 
@@ -104,7 +102,6 @@ class _SpotItAIState extends State<SpotItAI> {
         );
       },
       onGenerateRoute: (settings) {
-        // Fallback for unknown routes
         return MaterialPageRoute(
           builder: (_) => const SplashScreen(),
         );

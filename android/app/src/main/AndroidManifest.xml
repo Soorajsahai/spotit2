@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network access (required for Firebase Storage uploads and image loading) -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Permissions required for camera capture and location -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'firebase_service.dart';
+import 'supabase_service.dart';
 import 'model/post_model.dart';
 import 'user_service.dart';
 import 'app_theme.dart';
@@ -14,7 +14,7 @@ class CreatePostPage extends StatefulWidget {
 }
 
 class _CreatePostPageState extends State<CreatePostPage> {
-  final _firebase = FirebaseService();
+  final _firebase = SupabaseService();
   final _descriptionCtrl = TextEditingController();
   File? _imageFile;
   bool _isPosting = false;

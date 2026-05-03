@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'firebase_service.dart';
+import 'supabase_service.dart';
 import 'model/issue_model.dart';
 
 class TrackIssuesPage extends StatelessWidget {
@@ -7,7 +7,7 @@ class TrackIssuesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = FirebaseService();
+    final service = SupabaseService();
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -54,38 +54,21 @@ class TrackIssuesPage extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: StreamBuilder(
-              stream: service.getIssues().onValue.asBroadcastStream(),
+            child: StreamBuilder<List<Issue>>(
+              stream: service.issuesStream,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const _LoadingStatsRow();
                 }
 
-                final event = snapshot.data;
-                final value = event!.snapshot.value;
-                if (value == null) {
+                final issues = snapshot.data!;
+                if (issues.isEmpty) {
                   return const _EmptyStatsRow();
                 }
 
-                final Map<dynamic, dynamic> map =
-                    value as Map<dynamic, dynamic>;
-                final issues = map.entries
-                    .map((e) =>
-                        Issue.fromJson(Map<dynamic, dynamic>.from(e.value)))
-                    .toList();
-
-                final activeIssues = issues
-                    .where(
-                        (issue) => issue.status.toLowerCase() == 'pending')
-                    .length;
-                final resolvedIssues = issues
-                    .where(
-                        (issue) => issue.status.toLowerCase() == 'resolved')
-                    .length;
-                final inProgressIssues = issues
-                    .where((issue) =>
-                        issue.status.toLowerCase() == 'in progress')
-                    .length;
+                final activeIssues = issues.where((i) => i.status.toLowerCase() == 'pending').length;
+                final resolvedIssues = issues.where((i) => i.status.toLowerCase() == 'resolved').length;
+                final inProgressIssues = issues.where((i) => i.status.toLowerCase() == 'in progress').length;
 
                 return Row(
                   children: [

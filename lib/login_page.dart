@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'register_page.dart';
 import 'user_service.dart';
-import 'firebase_db.dart';
 import 'app_theme.dart';
 
 class LoginPage extends StatefulWidget {
@@ -16,7 +15,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController usernameCtrl = TextEditingController();
   final TextEditingController passwordCtrl = TextEditingController();
   
-  DatabaseReference get _db => dbRef("users");
+  final _db = Supabase.instance.client.from('users');
 
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -35,48 +34,22 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      // Fetch all users and find matching username (avoids Firebase index requirement)
-      final snapshot = await _db
-          .get()
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              throw Exception('Connection timeout. Please check your internet connection and Firebase configuration.');
-            },
-          );
+      final rows = await _db
+          .select()
+          .eq('username', usernameCtrl.text.trim())
+          .limit(1);
 
-      final value = snapshot.value;
-      if (value == null) {
+      if (rows == null || (rows as List).isEmpty) {
         setState(() {
-          _errorMessage = "No users in database. Register first (Create New Account).";
+          _errorMessage = "Username not found. Register first if you haven't.";
           _isLoading = false;
         });
         return;
       }
 
-      final Map<dynamic, dynamic> users = value is Map ? Map<dynamic, dynamic>.from(value) : <dynamic, dynamic>{};
-      String? userKey;
-      Map<dynamic, dynamic>? userData;
+      final userData = rows[0] as Map<String, dynamic>;
 
-      for (final e in users.entries) {
-        final data = e.value;
-        if (data is Map && (data["username"]?.toString() ?? "") == usernameCtrl.text.trim()) {
-          userKey = e.key.toString();
-          userData = Map<dynamic, dynamic>.from(data);
-          break;
-        }
-      }
-
-      if (userData == null) {
-        setState(() {
-          _errorMessage = "Username not found. Register first if you haven’t.";
-          _isLoading = false;
-        });
-        return;
-      }
-
-      // Check password (trim both; Firebase may store with different type)
-      if (userData["password"]?.toString().trim() != passwordCtrl.text.trim()) {
+      if ((userData['password'] ?? '').toString().trim() != passwordCtrl.text.trim()) {
         setState(() {
           _errorMessage = "Incorrect password";
           _isLoading = false;
@@ -84,49 +57,28 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      // Get user role and navigate accordingly (case-insensitive)
-      final String role = (userData["role"] ?? "Student").toString().trim();
+      final String role = (userData['role'] ?? 'Student').toString().trim();
+      final String userKey = userData['id'].toString();
       setState(() => _selectedRole = role);
 
-      // Save current user id and username for vote tracking
       try {
-        UserService.setCurrentUser(userKey!, (userData["username"] ?? usernameCtrl.text).toString(), role);
+        UserService.setCurrentUser(userKey, (userData['username'] ?? usernameCtrl.text).toString(), role);
       } catch (e) {
         print('Failed to set current user: $e');
       }
 
-      // Navigate based on role (use root navigator to ensure correct route stack)
       if (mounted) {
         setState(() => _isLoading = false);
         final nav = Navigator.of(context, rootNavigator: true);
-        if (role.toLowerCase() == "admin") {
+        if (role.toLowerCase() == 'admin') {
           nav.pushNamedAndRemoveUntil('/admin', (route) => false);
         } else {
           nav.pushNamedAndRemoveUntil('/home', (route) => false);
         }
       }
-
-    } on Exception catch (e) {
-      String errorMsg = e.toString();
-      if (errorMsg.contains('timeout') || errorMsg.contains('Connection') || errorMsg.contains('Database') || errorMsg.contains('Firebase')) {
-        setState(() {
-          _errorMessage = "Database connection failed.\n\nPossible causes:\n• Wrong Firebase project configured\n• Database not enabled\n• Network connection issue\n\nPlease run 'flutterfire configure' to fix.";
-          _isLoading = false;
-        });
-      } else if (errorMsg.contains('Permission') || errorMsg.contains('permission_denied') || errorMsg.contains('PERMISSION_DENIED')) {
-        setState(() {
-          _errorMessage = "Database permission denied.\n\nIn Firebase Console → Realtime Database → Rules, allow read for login, e.g.:\n\"users\": { \".read\": true, \".write\": true }\n(Use stricter rules in production.)";
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = "Login failed: $errorMsg";
-          _isLoading = false;
-        });
-      }
     } catch (e, stack) {
       setState(() {
-        _errorMessage = "Login failed: $e\n\nIf you see permission_denied, update Realtime Database rules in Firebase Console to allow read on 'users'.";
+        _errorMessage = 'Login failed: $e';
         _isLoading = false;
       });
       debugPrint('Login error: $e\n$stack');

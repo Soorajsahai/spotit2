@@ -11,7 +11,7 @@ class YoloService {
   /// [server] should be your Railway public URL after deployment,
   /// e.g. 'https://campusfix-ai.up.railway.app'
   /// Replace the value below with your actual Railway domain.
-  YoloService({String server = 'https://spot-it-production-2946.up.railway.app'}) {
+  YoloService({String server = 'https://spot-it-production.up.railway.app'}) {
     var s = server.trim();
     if (!s.startsWith('http://') && !s.startsWith('https://')) s = 'http://$s';
     if (s.endsWith('/')) s = s.substring(0, s.length - 1);
@@ -45,7 +45,7 @@ class YoloService {
       req.files.add(await http.MultipartFile.fromPath('file', path));
 
       // add a timeout so we fail fast and can surface a clearer message
-      final streamed = await req.send().timeout(const Duration(seconds: 10));
+      final streamed = await req.send().timeout(const Duration(seconds: 60));
       final resp = await http.Response.fromStream(streamed);
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         final decoded = json.decode(resp.body);

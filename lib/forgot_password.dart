@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'firebase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'supabase_service.dart';
 import 'app_theme.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
@@ -11,7 +11,7 @@ class ForgotPasswordPage extends StatefulWidget {
 }
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
-  final FirebaseService service = FirebaseService();
+  final SupabaseService service = SupabaseService();
   final TextEditingController emailCtrl = TextEditingController();
   final TextEditingController passCtrl = TextEditingController();
   final TextEditingController confirmCtrl = TextEditingController();
@@ -29,9 +29,12 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
     setState(() => _isLoading = true);
     try {
-      final snapshot = await service.getUsers().orderByChild('email').equalTo(email).once();
-      final value = snapshot.snapshot.value;
-      if (value == null) {
+      final rows = await Supabase.instance.client
+          .from('users')
+          .select('id')
+          .eq('email', email)
+          .limit(1);
+      if ((rows as List).isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email not found')));
         setState(() => _isEmailFound = false);
       } else {

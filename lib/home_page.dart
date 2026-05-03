@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'firebase_service.dart';
+import 'supabase_service.dart';
 import 'model/issue_model.dart';
 import 'package:geolocator/geolocator.dart';
 import 'user_service.dart';
@@ -13,9 +12,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final service = FirebaseService();
+  final service = SupabaseService();
   Position? _currentPosition;
-  bool _nearbyOnly = true;
+  bool _nearbyOnly = false;
   double _radiusMeters = 1000; // default radius
   String _searchQuery = '';
 
@@ -181,18 +180,10 @@ class _HomePageState extends State<HomePage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                StreamBuilder(
-                  stream: service.getIssues().onValue.asBroadcastStream(),
+                StreamBuilder<List<Issue>>(
+                  stream: service.issuesStream,
                   builder: (context, snapshot) {
-                    int totalIssues = 0;
-                    if (snapshot.hasData) {
-                      final event = snapshot.data;
-                      final value = event!.snapshot.value;
-                      if (value != null) {
-                        final Map<dynamic, dynamic> map = value as Map<dynamic, dynamic>;
-                        totalIssues = map.length;
-                      }
-                    }
+                    final totalIssues = snapshot.data?.length ?? 0;
                     
                     return Text(
                       'Recent Issues ($totalIssues)',
@@ -251,7 +242,7 @@ class _HomePageState extends State<HomePage> {
           // Issues List
           Expanded(
             child: StreamBuilder(
-              stream: service.getIssues().onValue.asBroadcastStream(),
+              stream: service.issuesStream,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return Center(
@@ -269,71 +260,40 @@ class _HomePageState extends State<HomePage> {
                   );
                 }
 
-                final event = snapshot.data;
-                final value = event!.snapshot.value;
-                if (value == null) {
+                final allIssues = snapshot.data!;
+                if (allIssues.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.report_problem_outlined,
-                          size: 60,
-                          color: Colors.grey[400],
-                        ),
+                        Icon(Icons.report_problem_outlined, size: 60, color: Colors.grey[400]),
                         const SizedBox(height: 16),
-                        const Text(
-                          'No Issues Reported',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey,
-                          ),
-                        ),
+                        const Text('No Issues Reported',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey)),
                         const SizedBox(height: 8),
-                        Text(
-                          'Be the first to report a campus issue',
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
+                        Text('Be the first to report a campus issue',
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   );
                 }
 
-                final Map<dynamic, dynamic> map = value as Map<dynamic, dynamic>;
-                // Build list of items with keys so we can update votes
-                final items = map.entries
-                    .map((e) => {
-                          'key': e.key.toString(),
-                          'issue': Issue.fromJson(Map<dynamic, dynamic>.from(e.value)),
-                        })
-                    .toList();
-
-                // Optionally filter by proximity and search query
-                final filtered = items.where((it) {
-                  final issue = it['issue'] as Issue;
+                final filtered = allIssues.where((issue) {
                   if (_searchQuery.isNotEmpty) {
                     final q = _searchQuery.toLowerCase();
-                    final matches = (issue.title.toLowerCase().contains(q) || issue.className.toLowerCase().contains(q));
-                    if (!matches) return false;
+                    if (!issue.title.toLowerCase().contains(q) && !issue.className.toLowerCase().contains(q)) return false;
                   }
                   if (!_nearbyOnly || _currentPosition == null) return true;
                   final dist = Geolocator.distanceBetween(
-                    _currentPosition!.latitude,
-                    _currentPosition!.longitude,
-                    issue.latitude,
-                    issue.longitude,
+                    _currentPosition!.latitude, _currentPosition!.longitude,
+                    issue.latitude, issue.longitude,
                   );
                   return dist <= _radiusMeters;
                 }).toList();
 
-                // Sort by priority: primary = upvotes descending (highest first), secondary = reportedAt descending
-                // Sort so latest posted issues come first
                 filtered.sort((a, b) {
-                  final A = a['issue'] as Issue;
-                  final B = b['issue'] as Issue;
-                  final aTime = A.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-                  final bTime = B.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                  final aTime = a.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+                  final bTime = b.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
                   return bTime.compareTo(aTime);
                 });
 
@@ -343,9 +303,8 @@ class _HomePageState extends State<HomePage> {
                     physics: const BouncingScrollPhysics(),
                     itemCount: filtered.length,
                     itemBuilder: (context, i) {
-                      final it = filtered[i];
-                      final issue = it['issue'] as Issue;
-                      final key = it['key'] as String;
+                      final issue = filtered[i];
+                      final key = issue.id ?? i.toString();
                       return _buildIssueCard(issue, key, context);
                     },
                   ),
@@ -353,6 +312,7 @@ class _HomePageState extends State<HomePage> {
               },
             ),
           ),
+
         ],
       ),
     );
@@ -844,12 +804,49 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     height: 210,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: double.infinity,
-                      height: 210,
-                      color: Theme.of(context).colorScheme.surfaceVariant,
-                      child: Icon(Icons.broken_image, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
+                    cacheWidth: 800,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        width: double.infinity,
+                        height: 210,
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.blue[400],
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (_, error, __) {
+                      debugPrint('Image.network error for ${issue.imageUrl}: $error');
+                      return Container(
+                        width: double.infinity,
+                        height: 210,
+                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.image_not_supported_outlined,
+                                size: 40,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Image unavailable',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
                 Padding(
@@ -1028,39 +1025,24 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        StreamBuilder<DatabaseEvent>(
+        StreamBuilder<List<Map<String, dynamic>>>(
           stream: service.issueCommentsStream(issueKey),
           builder: (context, snap) {
-            if (!snap.hasData || snap.data!.snapshot.value == null) {
+            final comments = snap.data ?? [];
+            if (comments.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text('No comments yet.', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               );
             }
-            final map = snap.data!.snapshot.value as Map<dynamic, dynamic>?;
-            if (map == null || map.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text('No comments yet.', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              );
-            }
-            final entries = map.entries.toList()
-              ..sort((a, b) {
-                final aData = a.value is Map ? a.value as Map<dynamic, dynamic> : null;
-                final bData = b.value is Map ? b.value as Map<dynamic, dynamic> : null;
-                final aTime = aData?['createdAt']?.toString() ?? '';
-                final bTime = bData?['createdAt']?.toString() ?? '';
-                return aTime.compareTo(bTime);
-              });
             return Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: entries.map((e) {
-                  final data = e.value is Map ? Map<dynamic, dynamic>.from(e.value as Map) : <dynamic, dynamic>{};
+                children: comments.map((data) {
                   final text = data['text']?.toString() ?? '';
-                  final authorName = data['authorName']?.toString() ?? 'Anonymous';
-                  final createdAt = data['createdAt']?.toString();
+                  final authorName = data['author_name']?.toString() ?? 'Anonymous';
+                  final createdAt = data['created_at']?.toString();
                   String timeStr = '';
                   if (createdAt != null && createdAt.isNotEmpty) {
                     try {
@@ -1091,6 +1073,7 @@ class _HomePageState extends State<HomePage> {
                                   Text(authorName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                                   if (timeStr.isNotEmpty) Text(' · $timeStr', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                                 ],
+
                               ),
                               const SizedBox(height: 2),
                               Text(text, style: const TextStyle(fontSize: 13)),

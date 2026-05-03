@@ -16,6 +16,7 @@ class Post {
     this.createdAt,
   });
 
+  // ─── Firebase legacy ──────────────────────────────────────────────────────
   Map<String, dynamic> toJson() => {
         'imageUrl': imageUrl,
         'description': description,
@@ -32,6 +33,27 @@ class Post {
       description: json['description']?.toString() ?? '',
       authorId: json['authorId']?.toString() ?? '',
       authorName: json['authorName']?.toString() ?? 'Unknown',
+      createdAt: createdAtStr != null ? DateTime.tryParse(createdAtStr) : null,
+    );
+  }
+
+  // ─── Supabase ─────────────────────────────────────────────────────────────
+  Map<String, dynamic> toSupabaseJson() => {
+        'image_url': imageUrl,
+        'description': description,
+        'author_id': authorId,
+        'author_name': authorName,
+        'created_at': createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      };
+
+  static Post fromMap(Map<String, dynamic> map) {
+    final createdAtStr = map['created_at']?.toString();
+    return Post(
+      key: map['id']?.toString(),
+      imageUrl: map['image_url']?.toString() ?? '',
+      description: map['description']?.toString() ?? '',
+      authorId: map['author_id']?.toString() ?? '',
+      authorName: map['author_name']?.toString() ?? 'Unknown',
       createdAt: createdAtStr != null ? DateTime.tryParse(createdAtStr) : null,
     );
   }

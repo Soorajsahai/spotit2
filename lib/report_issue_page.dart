@@ -10,7 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'camera_capture_page.dart';
 import 'yolo_service.dart';
 import 'detection_preview.dart';
-import 'firebase_service.dart';
+import 'supabase_service.dart';
 import 'model/issue_model.dart';
 import 'user_service.dart';
 import 'app_theme.dart';
@@ -24,7 +24,7 @@ class ReportIssuePage extends StatefulWidget {
 
 class _ReportIssuePageState extends State<ReportIssuePage> {
   final yolo = YoloService();
-  final firebase = FirebaseService();
+  final firebase = SupabaseService();
   String output = "No detection yet";
   bool _isLoading = false;
   Position? _currentPosition;
@@ -244,7 +244,7 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
             ? UserService.username
             : UserService.userId,
       );
-      firebase.addIssue(issue);
+      await firebase.addIssue(issue);
       _descriptionController.text = description;
 
       setState(() {
@@ -344,7 +344,7 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
         reportedBy: UserService.userId,
       );
 
-      firebase.addIssue(issue);
+      await firebase.addIssue(issue);
 
       setState(() {
         output = "${issue.className} issue detected!";
@@ -413,7 +413,7 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
         reportedBy: UserService.userId,
       );
 
-      firebase.addIssue(issue);
+      await firebase.addIssue(issue);
 
       setState(() {
         output = "Issue reported successfully!";

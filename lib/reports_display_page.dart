@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'firebase_service.dart';
+import 'supabase_service.dart';
 import 'app_theme.dart';
 
 class ReportsDisplayPage extends StatelessWidget {
@@ -8,7 +7,7 @@ class ReportsDisplayPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = FirebaseService();
+    final service = SupabaseService();
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     return Scaffold(
@@ -26,7 +25,7 @@ class ReportsDisplayPage extends StatelessWidget {
           ),
         ),
       ),
-      body: StreamBuilder<DatabaseEvent>(
+      body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: service.reportsStream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -59,8 +58,12 @@ class ReportsDisplayPage extends StatelessWidget {
             );
           }
 
-          final value = snapshot.data?.snapshot.value;
-          if (value == null || (value is Map && value.isEmpty)) {
+          final reports = snapshot.data ?? [];
+          final validReports = reports
+              .where((r) => r['image_url'] != null && (r['image_url'] as String).isNotEmpty)
+              .toList();
+
+          if (validReports.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -92,32 +95,13 @@ class ReportsDisplayPage extends StatelessWidget {
             );
           }
 
-          final Map<dynamic, dynamic> map = value is Map
-              ? Map<dynamic, dynamic>.from(value)
-              : <dynamic, dynamic>{};
-          final reports = map.entries
-              .map((e) => {
-                    'key': e.key.toString(),
-                    'imageUrl': (e.value is Map ? (e.value as Map)['imageUrl'] : null)?.toString(),
-                    'createdAt': (e.value is Map ? (e.value as Map)['createdAt'] : null)?.toString(),
-                  })
-              .where((r) => r['imageUrl'] != null && (r['imageUrl'] as String).isNotEmpty)
-              .toList();
-
-          // Sort by createdAt descending (newest first)
-          reports.sort((a, b) {
-            final aStr = a['createdAt'] as String? ?? '';
-            final bStr = b['createdAt'] as String? ?? '';
-            return bStr.compareTo(aStr);
-          });
-
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: reports.length,
+            itemCount: validReports.length,
             itemBuilder: (context, index) {
-              final report = reports[index];
-              final imageUrl = report['imageUrl'] as String? ?? '';
-              final createdAtStr = report['createdAt'] as String?;
+              final report = validReports[index];
+              final imageUrl = (report['image_url'] ?? '') as String;
+              final createdAtStr = report['created_at']?.toString();
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'firebase_service.dart';
+import 'supabase_service.dart';
 import 'model/issue_model.dart';
 import 'user_service.dart';
 import 'app_theme.dart';
@@ -13,18 +12,18 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
-  final service = FirebaseService();
+  final service = SupabaseService();
   String _searchQuery = '';
   final TextEditingController _searchCtrl = TextEditingController();
 
-  late final Stream<DatabaseEvent> _issuesStream;
-  late final Stream<DatabaseEvent> _usersStream;
+  late final Stream<List<Issue>> _issuesStream;
+  late final Stream<List<Map<String, dynamic>>> _usersStream;
 
   @override
   void initState() {
     super.initState();
-    _issuesStream = service.getIssues().onValue.asBroadcastStream();
-    _usersStream = service.getUsers().onValue.asBroadcastStream();
+    _issuesStream = service.issuesStream;
+    _usersStream = service.usersStream;
   }
 
   @override
@@ -240,17 +239,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
             // Stats
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: StreamBuilder(
-                stream: service.getIssues().onValue.asBroadcastStream(),
+              child: StreamBuilder<List<Issue>>(
+                stream: service.issuesStream,
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const SizedBox.shrink();
-                  final event = snapshot.data; // DatabaseEvent
-                  final value = event!.snapshot.value;
-                  if (value == null) return const SizedBox.shrink();
-                  final Map<dynamic, dynamic> map = value as Map<dynamic, dynamic>;
-                  final issues = map.entries
-                      .map((e) => Issue.fromJson(Map<dynamic, dynamic>.from(e.value)))
-                      .toList();
+                  final issues = snapshot.data!;
+                  if (issues.isEmpty) return const SizedBox.shrink();
 
                   final pending = issues.where((i) => i.status.toLowerCase() == 'pending').length;
                   final inProgress = issues.where((i) => i.status.toLowerCase() == 'in progress').length;
@@ -288,49 +282,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 children: [
                   // Issues Tab
                   _KeepAliveTab(
-                    child: StreamBuilder<DatabaseEvent>(
+                    child: StreamBuilder<List<Issue>>(
                       stream: _issuesStream,
                       builder: (context, snapshot) {
                       if (snapshot.hasError) {
                         return Center(child: Text('Error: ${snapshot.error}'));
                       }
-                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                      if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      if (!snapshot.hasData) {
-                        return const Center(child: Text('No data'));
-                      }
-                      final event = snapshot.data as DatabaseEvent;
-                      final value = event.snapshot.value;
-                      if (value == null) return Center(child: Text('No issues'));
+                      final issues = snapshot.data!;
+                      if (issues.isEmpty) return const Center(child: Text('No issues'));
 
-                      final Map<dynamic, dynamic> map = value as Map<dynamic, dynamic>;
-                      final items = map.entries
-                          .map((e) => {'key': e.key.toString(), 'issue': Issue.fromJson(Map<dynamic, dynamic>.from(e.value))})
-                          .toList();
-
-                      // Optional search filter
                       final q = _searchQuery.toLowerCase();
                       final filtered = q.isNotEmpty
-                          ? items.where((it) {
-                              final issue = it['issue'] as Issue;
+                          ? issues.where((issue) {
                               return issue.title.toLowerCase().contains(q) ||
                                   issue.className.toLowerCase().contains(q) ||
                                   issue.severity.toLowerCase().contains(q) ||
                                   issue.status.toLowerCase().contains(q);
                             }).toList()
-                          : items;
+                          : issues;
 
-                      // Sort by priority: upvotes descending, then reportedAt descending
                       filtered.sort((a, b) {
-                        final A = a['issue'] as Issue;
-                        final B = b['issue'] as Issue;
-
-                        if (B.upvotes != A.upvotes) {
-                          return B.upvotes.compareTo(A.upvotes);
-                        }
-
-                        return (B.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(A.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+                        if (b.upvotes != a.upvotes) return b.upvotes.compareTo(a.upvotes);
+                        return (b.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(a.reportedAt ?? DateTime.fromMillisecondsSinceEpoch(0));
                       });
 
                       return ListView.separated(
@@ -338,8 +314,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         itemCount: filtered.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
-                          final key = filtered[i]['key'] as String;
-                          final issue = filtered[i]['issue'] as Issue;
+                          final issue = filtered[i];
+                          final key = issue.id ?? i.toString();
                           return _buildAdminIssueTile(issue, key);
                         },
                       );
@@ -349,8 +325,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                   // Analytics Tab — use one-time fetch (stream doesn't replay to new listeners)
                   _KeepAliveTab(
-                    child: FutureBuilder<DataSnapshot>(
-                      future: service.getIssues().get(),
+                    child: FutureBuilder<List<Issue>>(
+                      future: service.fetchIssues(),
                       builder: (context, snapshot) {
                         if (snapshot.hasError) {
                           return Center(child: Text('Error: ${snapshot.error}'));
@@ -358,16 +334,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         if (!snapshot.hasData) {
                           return const Center(child: CircularProgressIndicator());
                         }
-                        final value = snapshot.data!.value;
-                        if (value == null || (value is Map && (value as Map).isEmpty)) {
+                        final issues = snapshot.data!;
+                        if (issues.isEmpty) {
                           return Center(child: Text('No issues yet', style: TextStyle(color: Colors.grey[600], fontSize: 16)));
                         }
-                        final Map<dynamic, dynamic> map = value as Map<dynamic, dynamic>;
-                        final issues = map.entries
-                            .map((e) => Issue.fromJson(Map<dynamic, dynamic>.from(e.value)))
-                            .toList();
 
-                        // Aggregate by className (most reported issue type)
                         final Map<String, int> byClass = {};
                         for (final issue in issues) {
                           final key = issue.className.isNotEmpty ? issue.className : 'Other';
@@ -380,15 +351,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         return ListView(
                           padding: const EdgeInsets.all(16),
                           children: [
-                            const Text(
-                              'Most Reported Issues',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
-                            ),
+                            const Text('Most Reported Issues',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
                             const SizedBox(height: 8),
-                            Text(
-                              'Issue types by report count',
-                              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                            ),
+                            Text('Issue types by report count', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
                             const SizedBox(height: 20),
                             if (sorted.isEmpty)
                               const Center(child: Text('No issues reported yet'))
@@ -402,50 +368,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                   // Manage Students Tab
                   _KeepAliveTab(
-                    child: StreamBuilder<DatabaseEvent>(
+                    child: StreamBuilder<List<Map<String, dynamic>>>(
                       stream: _usersStream,
                       builder: (context, snapshot) {
                       if (snapshot.hasError) {
                         return Center(child: Text('Error: ${snapshot.error}'));
                       }
-                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                      if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      if (!snapshot.hasData) return const Center(child: Text('No data'));
-                      final event = snapshot.data as DatabaseEvent;
-                      final value = event.snapshot.value;
-                      if (value == null) return Center(child: Text('No users registered'));
-
-                      final Map<dynamic, dynamic> map = value as Map<dynamic, dynamic>;
-                      final users = map.entries
-                          .map((e) => {'key': e.key.toString(), 'data': Map<dynamic, dynamic>.from(e.value)})
-                          .toList();
+                      final users = snapshot.data!;
+                      if (users.isEmpty) return const Center(child: Text('No users registered'));
 
                       final q = _searchQuery.toLowerCase();
                       final filteredUsers = q.isNotEmpty
                           ? users.where((u) {
-                              final data = u['data'] as Map<dynamic, dynamic>;
-                              final name = (data['name'] ?? '').toString().toLowerCase();
-                              final username = (data['username'] ?? '').toString().toLowerCase();
-                              final email = (data['email'] ?? '').toString().toLowerCase();
+                              final name = (u['name'] ?? '').toString().toLowerCase();
+                              final username = (u['username'] ?? '').toString().toLowerCase();
+                              final email = (u['email'] ?? '').toString().toLowerCase();
                               return name.contains(q) || username.contains(q) || email.contains(q);
                             }).toList()
                           : users;
 
-                      filteredUsers.sort((a, b) {
-                        final A = a['data'] as Map<dynamic, dynamic>;
-                        final B = b['data'] as Map<dynamic, dynamic>;
-                        return (B['createdAt'] ?? '').toString().compareTo((A['createdAt'] ?? '').toString());
-                      });
+                      filteredUsers.sort((a, b) =>
+                          (b['created_at'] ?? '').toString().compareTo((a['created_at'] ?? '').toString()));
 
                       return ListView.separated(
                         padding: const EdgeInsets.all(12),
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemCount: filteredUsers.length,
                         itemBuilder: (context, i) {
-                          final key = filteredUsers[i]['key'] as String;
-                          final data = filteredUsers[i]['data'] as Map<dynamic, dynamic>;
-                          return _buildUserTile(key, data);
+                          final u = filteredUsers[i];
+                          final key = u['id'].toString();
+                          return _buildUserTile(key, u);
                         },
                       );
                     },
