@@ -11,7 +11,7 @@ class YoloService {
   /// [server] should be your Railway public URL after deployment,
   /// e.g. 'https://campusfix-ai.up.railway.app'
   /// Replace the value below with your actual Railway domain.
-  YoloService({String server = 'https://spotit2-production.up.railway.app'}) {
+  YoloService({String server = 'https://spotit2-production-76ba.up.railway.app'}) {
     var s = server.trim();
     if (!s.startsWith('http://') && !s.startsWith('https://')) s = 'http://$s';
     if (s.endsWith('/')) s = s.substring(0, s.length - 1);
