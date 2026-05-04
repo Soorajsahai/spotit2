@@ -44,8 +44,8 @@ class YoloService {
       final req = http.MultipartRequest('POST', endpoint);
       req.files.add(await http.MultipartFile.fromPath('file', path));
 
-      // add a timeout so we fail fast and can surface a clearer message
-      final streamed = await req.send().timeout(const Duration(seconds: 60));
+      // Render free tier can take up to 60-90s for inference; use a generous timeout
+      final streamed = await req.send().timeout(const Duration(seconds: 180));
       final resp = await http.Response.fromStream(streamed);
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         final decoded = json.decode(resp.body);
